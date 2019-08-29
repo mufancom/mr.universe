@@ -1,0 +1,22 @@
+{
+  "name": "mr.universe",
+  "version": "0.1.0",
+  "description": "",
+  "author": "Chengdu Mufan Technology Co., Ltd.",
+  "license": "MIT",
+  "main": "bld/library/index.js",
+  "types": "bld/library/index.d.ts",
+  "files": [
+    "src/library/**/*.ts",
+    "bld/library"
+  ],
+  "devDependencies": {
+    "@types/lodash": "^4.14.136",
+    "@types/node": "^12.6.2"
+  },
+  "dependencies": {
+    "lodash": "^4.17.15",
+    "tslang": "^0.1.16",
+    "tslib": "^1.10.0"
+  }
+}
