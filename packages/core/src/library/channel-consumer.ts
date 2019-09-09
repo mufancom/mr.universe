@@ -1,5 +1,12 @@
+import _ from 'lodash';
+
 import {IChannelQueue} from './channel-queue';
 import {ISignal, SignalMessage, SignalMessageId, SignalName} from './signal';
+
+export interface UnacknowledgedMessageInfo {
+  message: SignalMessage;
+  deliveredSignals: SignalName[];
+}
 
 abstract class ChannelConsumer<TTarget> {
   private signalNameToSignalMap: Map<SignalName, ISignal<TTarget>>;
@@ -31,10 +38,10 @@ abstract class ChannelConsumer<TTarget> {
    * @param target The message target.
    * @param signalName The name of signal via which the message has not been successfully delivered.
    */
-  protected abstract getUnresolvedMessagesNotDeliveredBySignal(
+  protected abstract getUnacknowledgedMessagesNotDeliveredBySignal(
     target: TTarget,
     signalName: SignalName,
-  ): Promise<SignalMessage[]>;
+  ): Promise<UnacknowledgedMessageInfo[]>;
 
   protected async processSignal(
     target: TTarget,
@@ -42,19 +49,41 @@ abstract class ChannelConsumer<TTarget> {
   ): Promise<void> {
     let signal = this.signalNameToSignalMap.get(signalName)!;
 
-    let throttleReleaseTimeout = await signal.isThrottled(target);
+    let throttleReleasesAt = await signal.isThrottled(target);
 
-    if (throttleReleaseTimeout) {
-      await this.queue.queueSignal(target, signalName, throttleReleaseTimeout);
+    if (throttleReleasesAt) {
+      let timeout = Math.max(throttleReleasesAt - Date.now(), 0);
+
+      await this.queue.queueSignal(target, signalName, timeout);
       return;
     }
 
-    let messages = await this.getUnresolvedMessagesNotDeliveredBySignal(
+    let excludedPrecedingSignalNames = signal.getExcludedPrecedingSignalNames();
+
+    let infos = await this.getUnacknowledgedMessagesNotDeliveredBySignal(
       target,
       signalName,
     );
 
+    if (!infos.length) {
+      return;
+    }
+
+    let nextSignalName = this.getNextSignalName(signalName);
+
+    let messages = infos
+      .filter(
+        ({deliveredSignals: deliveredSignalNames}) =>
+          _.intersection(deliveredSignalNames, excludedPrecedingSignalNames)
+            .length === 0,
+      )
+      .map(info => info.message);
+
     if (!messages.length) {
+      if (nextSignalName) {
+        await this.processSignal(target, nextSignalName);
+      }
+
       return;
     }
 
@@ -69,14 +98,20 @@ abstract class ChannelConsumer<TTarget> {
       delivered,
     );
 
-    if (delivered) {
-      return;
-    }
-
-    let nextSignalName = this.getNextSignalName(signalName);
-
     if (nextSignalName) {
-      await this.processSignal(target, nextSignalName);
+      if (delivered) {
+        let {acknowledgeTimeout} = signal.options;
+
+        if (acknowledgeTimeout) {
+          await this.queue.queueSignal(
+            target,
+            nextSignalName,
+            acknowledgeTimeout,
+          );
+        }
+      } else {
+        await this.processSignal(target, nextSignalName);
+      }
     }
   }
 

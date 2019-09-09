@@ -1,37 +1,84 @@
 import _ from 'lodash';
-import {Dict, Intersection, KeyOfValueWithType, ValueWithType} from 'tslang';
+import {
+  Default,
+  Dict,
+  Intersection,
+  KeyOfValueWithType,
+  OptionalizeUndefined,
+  ValueWithType,
+} from 'tslang';
 
 import {IChannelQueue} from './channel-queue';
-import {SignalMessageData, SignalMessageId} from './signal';
+import {SignalMessage, SignalMessageData} from './signal';
 
-export type MessageTemplateFunction = (data: object) => string;
+export class MessageTemplatePlaceholder<
+  T = unknown,
+  TRequired extends boolean = boolean
+> {
+  protected _type!: T;
+  protected _required!: TRequired;
 
-export type MessageTemplateDefinition = Dict<MessageTemplateFunction | true>;
+  readonly default: T;
 
-export type MessageTemplateDefinitionDict = Dict<
-  MessageTemplateDefinition | true
->;
+  constructor(defaultValue: T) {
+    this.default = defaultValue;
+  }
+}
+
+export function placeholder<T>(): MessageTemplatePlaceholder<T, true>;
+export function placeholder<T>(
+  defaultValue: T,
+): MessageTemplatePlaceholder<T, false>;
+export function placeholder(
+  defaultValue?: unknown,
+): MessageTemplatePlaceholder {
+  return new MessageTemplatePlaceholder(defaultValue);
+}
+
+export type MessageTemplateFunction = (data: object) => unknown;
+
+export type MessageTemplateDefinition = Dict<unknown>;
+
+export type MessageTemplateDefinitionDict = Dict<MessageTemplateDefinition>;
 
 export interface ChannelSendOptions {}
 
-type __ChannelSendParamsDataSection<TData extends object> = {} extends TData
+type __ChannelSendParamsDataSection<TData> = {} extends TData
   ? {data?: TData}
   : {data: TData};
 
-type __MessageTemplateSourceData<
-  TMessageTemplateFunction extends MessageTemplateFunction | true
+type __MessageTemplateFunctionSourceData<
+  TMessageTemplateFunction
 > = TMessageTemplateFunction extends MessageTemplateFunction
-  ? Parameters<TMessageTemplateFunction>[0]
+  ? Default<Exclude<Parameters<TMessageTemplateFunction>[0], undefined>, {}>
   : never;
 
+type __MessageTemplatePlaceholderSourceData<
+  TMessageTemplateDefinition extends object
+> = OptionalizeUndefined<
+  {
+    [TKey in KeyOfValueWithType<
+      TMessageTemplateDefinition,
+      MessageTemplatePlaceholder
+    >]: TMessageTemplateDefinition[TKey] extends MessageTemplatePlaceholder<
+      infer T,
+      infer TRequired
+    >
+      ? TRequired extends true
+        ? T
+        : T | undefined
+      : never;
+  }
+>;
+
 type __ChannelSendParamsData<
-  TMessageTemplateDefinition extends MessageTemplateDefinition | true
+  TMessageTemplateDefinition
 > = TMessageTemplateDefinition extends MessageTemplateDefinition
   ? Intersection<
-      | __MessageTemplateSourceData<
+      | __MessageTemplateFunctionSourceData<
           ValueWithType<TMessageTemplateDefinition, MessageTemplateFunction>
         >
-      | Record<KeyOfValueWithType<TMessageTemplateDefinition, true>, string>
+      | __MessageTemplatePlaceholderSourceData<TMessageTemplateDefinition>
     >
   : {};
 
@@ -44,7 +91,7 @@ type __ChannelSendParamsTypeAndDataSection<
     > & {type: TType}
   : never;
 
-type __ChannelSendParams<
+export type ChannelSendParamsType<
   TTarget,
   TDefinitionDict extends MessageTemplateDefinitionDict
 > = ChannelSendParams<TTarget> &
@@ -68,41 +115,52 @@ abstract class Channel<
   ) {}
 
   async send(
-    params: __ChannelSendParams<TTarget, TDefinitionDict>,
-  ): Promise<void>;
+    params: ChannelSendParamsType<TTarget, TDefinitionDict>,
+  ): Promise<SignalMessage[]>;
   async send({
     type,
     targets,
     data = {},
-  }: ChannelSendParams<TTarget>): Promise<void> {
+  }: ChannelSendParams<TTarget>): Promise<SignalMessage[]> {
     let definition = this.definitionDict[type];
 
-    if (definition === true) {
+    if (typeof definition === 'boolean') {
       definition = {};
     }
 
-    let templateData = _.mapValues(definition, (fn, key) =>
-      typeof fn === 'function' ? fn(data) : (data[key] as string),
+    let templateData = _.mapValues(definition, (origin, key) => {
+      if (origin instanceof MessageTemplatePlaceholder) {
+        let value = data[key];
+        return value === undefined ? origin.default : origin;
+      }
+
+      switch (typeof origin) {
+        case 'function':
+          return (origin as MessageTemplateFunction)(data);
+        default:
+          return origin;
+      }
+    });
+
+    let messages = await this.addMessages(
+      {
+        type,
+        data: templateData,
+      },
+      targets,
     );
 
     for (let target of targets) {
-      await this.addMessage(target, {
-        type,
-        templateData,
-      });
       await this.queue.queueSignal(target, undefined, 0);
     }
+
+    return messages;
   }
 
-  protected abstract addMessage(
-    target: TTarget,
+  protected abstract addMessages(
     data: SignalMessageData,
-  ): Promise<void>;
-
-  protected abstract resolveMessages(
-    target: TTarget,
-    messageIds?: SignalMessageId[],
-  ): Promise<void>;
+    targets: TTarget[],
+  ): Promise<SignalMessage[]>;
 }
 
 export const AbstractChannel = Channel;
@@ -115,24 +173,23 @@ export interface IChannel<
 // const definitionDict = {
 //   foo: {
 //     yoha: true,
+//     ppp: placeholder<number>(),
 //     hello: ({}: {foo: string}): string => '',
 //     helloX: ({}: {bar: number}): string => '',
 //   },
-//   bar: true,
+//   bar: {},
 // } as const;
-
-// let q = new Bull('');
 
 // class XChannel extends Channel<object, typeof definitionDict> {}
 
 // // let x = new Channel<object, typeof definitionDict>(definitionDict, []);
-// let x = new XChannel(definitionDict, []);
+// let x!: XChannel;
 
 // x.send({
 //   type: 'foo',
 //   targets: [],
 //   data: {
-//     yoha: '',
+//     ppp: 1,
 //     foo: '',
 //     bar: 123,
 //   },
