@@ -122,6 +122,10 @@ abstract class Channel<
     targets,
     data = {},
   }: ChannelSendParams<TTarget>): Promise<SignalMessage[]> {
+    if (!targets.length) {
+      return [];
+    }
+
     let definition = this.definitionDict[type];
 
     if (typeof definition === 'boolean') {
@@ -131,7 +135,7 @@ abstract class Channel<
     let templateData = _.mapValues(definition, (origin, key) => {
       if (origin instanceof MessageTemplatePlaceholder) {
         let value = data[key];
-        return value === undefined ? origin.default : origin;
+        return value === undefined ? origin.default : value;
       }
 
       switch (typeof origin) {
