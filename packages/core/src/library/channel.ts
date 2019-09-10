@@ -35,7 +35,7 @@ export function placeholder(
   return new MessageTemplatePlaceholder(defaultValue);
 }
 
-export type MessageTemplateFunction = (data: object) => unknown;
+export type MessageTemplateFunction = (data: object, type: string) => unknown;
 
 export type MessageTemplateDefinition = Dict<unknown>;
 
@@ -140,7 +140,7 @@ abstract class Channel<
 
       switch (typeof origin) {
         case 'function':
-          return (origin as MessageTemplateFunction)(data);
+          return (origin as MessageTemplateFunction)(data, type);
         default:
           return origin;
       }
