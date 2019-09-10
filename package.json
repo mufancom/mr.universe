@@ -1,16 +1,19 @@
 {
   "name": "mr.universe",
-  "version": "0.1.0",
   "private": true,
   "description": "",
   "repository": "https://github.com/makeflow/mr.universe.git",
   "author": "Chengdu Mufan Technology Co., Ltd.",
   "license": "MIT",
+  "scripts": {
+    "lerna:publish": "lerna publish prerelease --registry=https://registry.npmjs.org"
+  },
   "devDependencies": {
     "@magicspace/configs": "^0.1.49",
     "@magicspace/core": "^0.1.4",
     "@magicspace/templates": "^0.1.4",
     "@types/node": "^12.6.2",
+    "lerna": "^3.16.4",
     "magicspace": "^0.1.7",
     "prettier": "^1.18.2",
     "tslint": "^5.18.0",
@@ -18,6 +21,6 @@
     "typescript-tslint-plugin": "^0.5.4"
   },
   "workspaces": [
-    "packages/core"
+    "packages/*"
   ]
 }
