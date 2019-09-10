@@ -6,7 +6,7 @@
   "author": "Chengdu Mufan Technology Co., Ltd.",
   "license": "MIT",
   "scripts": {
-    "lerna:publish": "lerna publish prerelease --registry=https://registry.npmjs.org"
+    "lerna:publish": "lerna publish --registry=https://registry.npmjs.org"
   },
   "devDependencies": {
     "@magicspace/configs": "^0.1.49",
