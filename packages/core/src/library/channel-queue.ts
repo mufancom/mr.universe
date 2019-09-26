@@ -2,13 +2,13 @@ import {SignalName} from './signal';
 
 export type ChannelQueueSignalProcessor<TTarget> = (
   target: TTarget,
-  signalName: SignalName | undefined,
+  signalName: SignalName,
 ) => Promise<void>;
 
 export interface IChannelQueue<TTarget> {
   queueSignal(
     target: TTarget,
-    signalName: SignalName | undefined,
+    signalName: SignalName,
     delay: number,
   ): Promise<void>;
 

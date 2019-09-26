@@ -9,7 +9,7 @@ import {
 } from 'tslang';
 
 import {IChannelQueue} from './channel-queue';
-import {SignalMessage, SignalMessageData} from './signal';
+import {SignalMessage, SignalMessageData, SignalName} from './signal';
 
 export class MessageTemplatePlaceholder<
   T = unknown,
@@ -108,10 +108,15 @@ abstract class Channel<
   TTarget,
   TDefinitionDict extends MessageTemplateDefinitionDict
 > {
-  constructor(definitionDict: TDefinitionDict, queue: IChannelQueue<TTarget>);
+  constructor(
+    definitionDict: TDefinitionDict,
+    queue: IChannelQueue<TTarget>,
+    firstSignalName: string,
+  );
   constructor(
     private definitionDict: MessageTemplateDefinitionDict,
     private queue: IChannelQueue<TTarget>,
+    private firstSignalName: SignalName,
   ) {}
 
   async send(
@@ -154,8 +159,10 @@ abstract class Channel<
       targets,
     );
 
+    let firstSignalName = this.firstSignalName;
+
     for (let target of targets) {
-      await this.queue.queueSignal(target, undefined, 0);
+      await this.queue.queueSignal(target, firstSignalName, 0);
     }
 
     return messages;
