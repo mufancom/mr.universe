@@ -23,10 +23,6 @@ abstract class ChannelConsumer<TTarget> {
     queue.processSignal((...args) => this.processSignal(...args));
   }
 
-  private get firstSignalName(): SignalName {
-    return this.signalNameToSignalMap.keys().next().value;
-  }
-
   protected abstract markMessagesProcessedWithSignal(
     target: TTarget,
     ids: SignalMessageId[],
@@ -45,7 +41,7 @@ abstract class ChannelConsumer<TTarget> {
 
   protected async processSignal(
     target: TTarget,
-    signalName = this.firstSignalName,
+    signalName: SignalName,
   ): Promise<void> {
     let signal = this.signalNameToSignalMap.get(signalName)!;
 
